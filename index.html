@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מצא את ההופעה שלך</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #080810; --surface: #111118; --surface2: #18181f;
+    --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.12);
+    --accent: #c8ff00; --accent-dim: rgba(200,255,0,0.12); --accent-border: rgba(200,255,0,0.25);
+    --purple-dim: rgba(123,94,167,0.15); --text: #efefef; --muted: #777; --muted2: #555;
+  }
+  body { font-family: 'Heebo', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.5; }
+
+  /* API SCREEN */
+  #api-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem; }
+  .api-card { background: var(--surface); border: 1px solid var(--border2); border-radius: 20px; padding: 2.5rem; max-width: 480px; width: 100%; text-align: center; }
+  .api-card .logo { font-size: 2.5rem; margin-bottom: 1rem; }
+  .api-card h1 { font-size: 1.6rem; font-weight: 900; margin-bottom: 0.4rem; }
+  .api-card h1 span { color: var(--accent); }
+  .api-card p { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; line-height: 1.6; }
+  .api-card p a { color: var(--accent); text-decoration: none; }
+  .api-input { width: 100%; padding: 0.75rem 1rem; background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px; color: var(--text); font-family: 'Heebo', sans-serif; font-size: 0.95rem; outline: none; margin-bottom: 1rem; text-align: left; direction: ltr; transition: border-color 0.2s; }
+  .api-input:focus { border-color: var(--accent); }
+  .api-btn { width: 100%; padding: 0.8rem; background: var(--accent); border: none; border-radius: 10px; font-family: 'Heebo', sans-serif; font-size: 1rem; font-weight: 700; color: #080810; cursor: pointer; transition: opacity 0.15s; }
+  .api-btn:hover { opacity: 0.88; }
+  .api-note { font-size: 0.78rem; color: var(--muted2); margin-top: 1rem; }
+
+  /* MAIN APP */
+  #app { display: none; max-width: 860px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  .top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2.5rem; }
+  .top-bar h1 { font-size: 2.2rem; font-weight: 900; letter-spacing: -1px; }
+  .top-bar h1 span { color: var(--accent); }
+  .top-bar .sub { font-size: 0.85rem; color: var(--muted); }
+  .change-key-btn { background: none; border: 1px solid var(--border2); border-radius: 8px; color: var(--muted); font-family: 'Heebo', sans-serif; font-size: 0.8rem; padding: 0.4rem 0.8rem; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .change-key-btn:hover { border-color: var(--accent-border); color: var(--accent); }
+
+  .search-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 1.75rem; margin-bottom: 1.5rem; }
+  .field { margin-bottom: 1.4rem; }
+  .field:last-of-type { margin-bottom: 0; }
+  .field-label { font-size: 0.72rem; font-weight: 700; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.65rem; display: block; }
+  .date-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  .date-wrap label { font-size: 0.72rem; color: var(--muted2); display: block; margin-bottom: 0.25rem; }
+  input[type="date"] { width: 100%; padding: 0.65rem 0.9rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 9px; color: var(--text); font-family: 'Heebo', sans-serif; font-size: 0.92rem; outline: none; transition: border-color 0.2s; }
+  input[type="date"]:focus { border-color: var(--accent); }
+  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1) opacity(0.3); cursor: pointer; }
+  .divider { height: 1px; background: var(--border); margin: 1.4rem 0; }
+  .pills { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+  .pill { padding: 0.38rem 0.85rem; border-radius: 20px; font-size: 0.86rem; cursor: pointer; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); transition: all 0.14s; user-select: none; }
+  .pill:hover { border-color: var(--accent-border); color: var(--text); }
+  .pill.selected { background: var(--accent); border-color: var(--accent); color: #080810; font-weight: 700; }
+  .genre-field { display: none; }
+  .genre-field.visible { display: block; }
+  .search-btn { width: 100%; padding: 0.9rem; background: var(--accent); border: none; border-radius: 11px; font-family: 'Heebo', sans-serif; font-size: 1.05rem; font-weight: 700; color: #080810; cursor: pointer; transition: opacity 0.15s, transform 0.1s; margin-top: 1.5rem; }
+  .search-btn:hover { opacity: 0.88; }
+  .search-btn:active { transform: scale(0.99); }
+  .search-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* RESULTS */
+  .results-header { font-size: 0.82rem; color: var(--muted); margin-bottom: 1rem; }
+  .results-header strong { color: var(--accent); }
+  .show-card { background: var(--surface); border: 1px solid var(--border); border-radius: 13px; padding: 1.1rem 1.3rem; margin-bottom: 0.7rem; cursor: pointer; transition: border-color 0.18s, background 0.18s, transform 0.12s; display: flex; gap: 1rem; align-items: flex-start; text-decoration: none; color: inherit; }
+  .show-card:hover { border-color: var(--accent-border); background: var(--surface2); transform: translateY(-1px); }
+  .date-badge { min-width: 50px; text-align: center; padding-top: 2px; }
+  .date-badge .d { font-size: 1.6rem; font-weight: 900; color: var(--accent); line-height: 1; }
+  .date-badge .m { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 1px; }
+  .show-body { flex: 1; min-width: 0; }
+  .show-body h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .show-meta { font-size: 0.82rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent-border); }
+  .tag.standup { background: var(--purple-dim); color: #c4aee8; border-color: rgba(123,94,167,0.3); }
+  .tag.festival { background: rgba(255,160,0,0.1); color: #ffa040; border-color: rgba(255,160,0,0.25); }
+  .show-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .show-price { font-size: 0.88rem; font-weight: 700; color: var(--text); white-space: nowrap; }
+  .buy-btn { font-size: 0.72rem; padding: 3px 10px; background: none; border: 1px solid var(--border2); border-radius: 6px; color: var(--muted); cursor: pointer; font-family: 'Heebo', sans-serif; transition: all 0.14s; white-space: nowrap; }
+  .show-card:hover .buy-btn { border-color: var(--accent-border); color: var(--accent); }
+
+  .loading-state { display: flex; flex-direction: column; align-items: center; padding: 3rem 1rem; gap: 1rem; }
+  .spinner { width: 36px; height: 36px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-state p { color: var(--muted); font-size: 0.9rem; }
+  .empty-state { text-align: center; padding: 3rem 1rem; color: var(--muted); }
+  .empty-state .icon { font-size: 3rem; opacity: 0.3; margin-bottom: 0.75rem; }
+  .error-box { background: rgba(220,60,60,0.08); border: 1px solid rgba(220,60,60,0.2); border-radius: 12px; padding: 1.1rem 1.3rem; font-size: 0.88rem; color: #f99; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<div id="api-screen">
+  <div class="api-card">
+    <div class="logo">🎸</div>
+    <h1>מצא את ה<span>הופעה</span> שלך</h1>
+    <p>הכנס את ה-API key שלך מ-<a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a></p>
+    <input class="api-input" type="password" id="api-key-input" placeholder="sk-ant-..." />
+    <button class="api-btn" onclick="startApp()">כניסה לאפליקציה</button>
+    <p class="api-note">המפתח נשמר רק בזיכרון הדפדפן ולא נשלח לשום מקום חוץ מ-Anthropic.</p>
+  </div>
+</div>
+
+<div id="app" style="display:block;">
+  <div class="top-bar">
+    <div>
+      <h1>מצא את ה<span>הופעה</span> שלך</h1>
+      <div class="sub">חיפוש חכם עם AI להופעות בישראל</div>
+    </div>
+  </div>
+
+  <div class="search-panel">
+    <div class="field">
+      <span class="field-label">טווח תאריכים</span>
+      <div class="date-row">
+        <div class="date-wrap"><label>מתאריך</label><input type="date" id="date-from" /></div>
+        <div class="date-wrap"><label>עד תאריך</label><input type="date" id="date-to" /></div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="field">
+      <span class="field-label">מיקום (ניתן לבחור כמה)</span>
+      <div class="pills">
+        <div class="pill" data-g="loc" data-v="תל אביב והסביבה">תל אביב</div>
+        <div class="pill" data-g="loc" data-v="ירושלים">ירושלים</div>
+        <div class="pill" data-g="loc" data-v="חיפה והקריות">חיפה</div>
+        <div class="pill" data-g="loc" data-v="מרכז (רמת גן, גבעתיים, פתח תקווה)">מרכז</div>
+        <div class="pill" data-g="loc" data-v="השרון (הרצליה, כפר סבא, נתניה)">שרון</div>
+        <div class="pill" data-g="loc" data-v="דרום (באר שבע, אשדוד, אשקלון)">דרום</div>
+        <div class="pill" data-g="loc" data-v="צפון (גליל, עמק)">צפון</div>
+        <div class="pill" data-g="loc" data-v="שפלה (ראשון לציון, רחובות, נס ציונה)">שפלה</div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="field">
+      <span class="field-label">סוג הופעה (ניתן לבחור כמה)</span>
+      <div class="pills">
+        <div class="pill" data-g="type" data-v="מוזיקה">🎵 מוזיקה</div>
+        <div class="pill" data-g="type" data-v="סטאנדאפ">🎤 סטאנדאפ</div>
+        <div class="pill" data-g="type" data-v="תיאטרון">🎭 תיאטרון</div>
+        <div class="pill" data-g="type" data-v="ילדים">🎪 ילדים</div>
+        <div class="pill" data-g="type" data-v="פסטיבל">🎉 פסטיבל</div>
+        <div class="pill" data-g="type" data-v="קומדי">😂 קומדי</div>
+      </div>
+    </div>
+    <div class="divider genre-field" id="genre-divider"></div>
+    <div class="field genre-field" id="genre-field">
+      <span class="field-label">סגנון מוזיקה</span>
+      <div class="pills">
+        <div class="pill" data-g="genre" data-v="רוק">רוק</div>
+        <div class="pill" data-g="genre" data-v="מטאל">מטאל</div>
+        <div class="pill" data-g="genre" data-v="פופ">פופ</div>
+        <div class="pill" data-g="genre" data-v="אלקטרוני">אלקטרוני</div>
+        <div class="pill" data-g="genre" data-v="ג'אז">ג'אז</div>
+        <div class="pill" data-g="genre" data-v="ישראלי">ישראלי</div>
+        <div class="pill" data-g="genre" data-v="היפ הופ">היפ הופ</div>
+        <div class="pill" data-g="genre" data-v="קלאסי">קלאסי</div>
+        <div class="pill" data-g="genre" data-v="אחר">אחר</div>
+      </div>
+    </div>
+    <button class="search-btn" id="search-btn" onclick="doSearch()">🔍 חפש הופעות</button>
+  </div>
+
+  <div id="results"></div>
+</div>
+
+<script>
+let API_KEY = '';
+const state = { loc: [], type: [], genre: [] };
+
+function startApp() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key.startsWith('sk-ant-')) { alert('מפתח לא תקין. הוא צריך להתחיל ב-sk-ant-'); return; }
+  API_KEY = key;
+  
+  initDates();
+}
+
+function changeKey() {
+  API_KEY = '';
+  document.getElementById('api-key-input').value = '';
+  
+}
+
+function initDates() {
+  const today = new Date();
+  const in3m = new Date(today); in3m.setMonth(in3m.getMonth() + 3);
+  document.getElementById('date-from').value = today.toISOString().split('T')[0];
+  document.getElementById('date-to').value = in3m.toISOString().split('T')[0];
+}
+
+document.querySelectorAll('.pill').forEach(p => {
+  p.addEventListener('click', () => {
+    const g = p.dataset.g, v = p.dataset.v;
+    if (state[g].includes(v)) { state[g] = state[g].filter(x => x !== v); p.classList.remove('selected'); }
+    else { state[g].push(v); p.classList.add('selected'); }
+    if (g === 'type') {
+      const show = state.type.includes('מוזיקה');
+      document.querySelectorAll('.genre-field').forEach(el => el.classList.toggle('visible', show));
+    }
+  });
+});
+
+document.getElementById('api-key-input').addEventListener('keydown', e => { if (e.key === 'Enter') startApp(); });
+
+async function doSearch() {
+  const btn = document.getElementById('search-btn');
+  const results = document.getElementById('results');
+  const from = document.getElementById('date-from').value;
+  const to = document.getElementById('date-to').value;
+  if (!from || !to) { alert('בחר תאריכים'); return; }
+
+  btn.disabled = true; btn.textContent = '🔍 מחפש...';
+  results.innerHTML = `<div class="loading-state"><div class="spinner"></div><p>מחפש הופעות ב-mevalim.co.il...</p></div>`;
+
+  try {
+    const response = await fetch('/api/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        types: state.type,
+        locations: state.loc,
+        genres: state.genre,
+        dateFrom: from,
+        dateTo: to
+      })
+    });
+
+    if (!response.ok) throw new Error('שגיאת שרת ' + response.status);
+    const data = await response.json();
+    if (data.error) throw new Error(data.error);
+    renderResults(data.shows || [], state.loc.join(', ') || 'כל הארץ', state.type.join(', ') || 'הכל');
+  } catch (e) {
+    results.innerHTML = `<div class="error-box"><strong>שגיאה:</strong><br>${e.message}</div>`;
+  }
+
+  btn.disabled = false; btn.textContent = '🔍 חפש הופעות';
+}
+
+
+const MONTHS = ['','ינו','פבר','מרץ','אפר','מאי','יוני','יולי','אוג','ספט','אוק','נוב','דצ'];
+
+function renderResults(shows, locs, types) {
+  const results = document.getElementById('results');
+  if (!shows.length) {
+    results.innerHTML = `<div class="empty-state"><div class="icon">🎵</div><p>לא נמצאו הופעות. נסה לשנות פרמטרים.</p></div>`;
+    return;
+  }
+  const cards = shows.map(s => {
+    const parts = (s.date || '').split('/');
+    const day = parts[0] || '?', month = MONTHS[parseInt(parts[1])] || '';
+    const isStandup = (s.type||'').includes('סטאנד') || (s.type||'').includes('קומד');
+    const isFestival = (s.type||'').includes('פסט');
+    const tagClass = isStandup ? 'tag standup' : isFestival ? 'tag festival' : 'tag';
+    const url = s.url || 'https://www.eventim.co.il';
+    return `<a class="show-card" href="${url}" target="_blank" rel="noopener">
+      <div class="date-badge"><div class="d">${day}</div><div class="m">${month}</div></div>
+      <div class="show-body">
+        <h3>${s.title || s.artist || 'הופעה'}</h3>
+        <div class="show-meta">
+          <span>📍 ${s.venue||''}, ${s.city||''}</span>
+          ${s.time ? `<span>🕐 ${s.time}</span>` : ''}
+          <span class="${tagClass}">${s.genre || s.type || 'מוזיקה'}</span>
+        </div>
+      </div>
+      <div class="show-right">
+        <div class="show-price">${s.price||''}</div>
+        <div class="buy-btn">לרכישה ←</div>
+      </div>
+    </a>`;
+  }).join('');
+  results.innerHTML = `<div class="results-header">נמצאו <strong>${shows.length}</strong> הופעות · ${locs} · ${types}</div>${cards}`;
+}
+</script>
+</body>
+</html>
