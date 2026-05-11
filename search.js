@@ -2,15 +2,14 @@ const https = require('https');
 
 function fetchUrl(url) {
   return new Promise((resolve) => {
-    const options = {
+    const req = https.get(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'text/html,application/xhtml+xml',
         'Accept-Language': 'he-IL,he;q=0.9',
       },
-      timeout: 8000
-    };
-    const req = https.get(url, options, (res) => {
+      timeout: 10000
+    }, (res) => {
       if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
         const loc = res.headers.location;
         return fetchUrl(loc.startsWith('http') ? loc : new URL(loc, url).href).then(resolve);
@@ -18,7 +17,7 @@ function fetchUrl(url) {
       if (res.statusCode !== 200) return resolve('');
       let data = '';
       res.setEncoding('utf8');
-      res.on('data', chunk => { data += chunk; if (data.length > 800000) res.destroy(); });
+      res.on('data', chunk => { data += chunk; if (data.length > 1500000) res.destroy(); });
       res.on('end', () => resolve(data));
     });
     req.on('error', () => resolve(''));
@@ -33,13 +32,39 @@ function extractCity(text) {
   return '';
 }
 
-function parseMevalimTickets(html, type) {
+function parseTickchak(html, defaultType) {
+  const shows = [];
+  const blockRe = /href="(https?:\/\/[^"]*tickchak\.co\.il\/[^"?#]*)"[^>]*>([\\s\\S]*?)<\/a>/gi;
+  let m;
+  while ((m = blockRe.exec(html)) !== null) {
+    const url = m[1];
+    if (!url.match(/\/event\//) && !url.match(/tickchak\.co\.il\/[^/]+\/[0-9]+/)) continue;
+    const inner = m[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (inner.length < 5 || inner.length > 400) continue;
+    const dateM = inner.match(/(\d{1,2})[\. ](\d{1,2})[\. ](20\d{2}|\d{2})/);
+    if (!dateM) continue;
+    const year = dateM[3].length === 2 ? '20' + dateM[3] : dateM[3];
+    const date = dateM[1].padStart(2,'0') + '/' + dateM[2].padStart(2,'0') + '/' + year;
+    const timeM = inner.match(/(\d{2}):(\d{2})/);
+    const city = extractCity(inner);
+    let title = inner
+      .replace(/האירוע החל/g,'').replace(/לאתר המכירה/g,'').replace(/קרדיט לצלם[^|]*/g,'')
+      .replace(/\d{1,2}[\. ]\d{1,2}[\. ]\d{2,4}/g,'').replace(/\d{2}:\d{2}/g,'')
+      .replace(/יום [א-ז]'/g,'').replace(new RegExp(city,'g'),'')
+      .replace(/\s+/g,' ').trim();
+    if (title.length < 3 || title.length > 100) continue;
+    shows.push({ title, city, date, time: timeM ? timeM[1]+':'+timeM[2] : '', price: '', type: defaultType, url, source: 'tickchak' });
+  }
+  return shows;
+}
+
+function parseMevalim(html, type) {
   const shows = [];
   const re = /href="(https:\/\/tickets\.mevalim\.co\.il\/event\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
   let m;
   while ((m = re.exec(html)) !== null) {
     const url = m[1];
-    const inner = m[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const inner = m[2].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
     if (inner.length < 3) continue;
     const priceM = inner.match(/(\d+)\s*\u20aa/);
     const dateM = inner.match(/(\d{1,2})\.(\d{2})/);
@@ -48,41 +73,33 @@ function parseMevalimTickets(html, type) {
     const timeM = inner.match(/(\d{2}):(\d{2})/);
     const city = extractCity(inner);
     const price = priceM ? '\u20aa' + priceM[1] : '';
-    let title = inner
-      .replace(/~~[\d\s\u20aa]+~~/g, '').replace(/\d+\s*\u20aa/g, '')
-      .replace(/\d{1,2}\.\d{2}/g, '').replace(/\d{2}:\d{2}/g, '')
-      .replace(new RegExp(city, 'g'), '').replace(/\s+/g, ' ').trim();
+    let title = inner.replace(/~~[\d\s\u20aa]+~~/g,'').replace(/\d+\s*\u20aa/g,'').replace(/\d{1,2}\.\d{2}/g,'').replace(/\d{2}:\d{2}/g,'').replace(new RegExp(city,'g'),'').replace(/\s+/g,' ').trim();
     if (title.length < 2) continue;
-    shows.push({ title, city, date, time: timeM ? timeM[1] + ':' + timeM[2] : '', price, type, url, source: 'mevalim' });
+    shows.push({ title, city, date, time: timeM ? timeM[1]+':'+timeM[2] : '', price, type, url, source: 'mevalim' });
   }
   return shows;
 }
 
-function extractArtistLinks(html) {
+function extractMevalimArtistLinks(html) {
   const links = new Set();
-  const categories = ['shows','stand-up','concerts','theater','kids-shows','musicals','dance'];
+  const cats = ['shows','stand-up','concerts','theater','kids-shows','musicals','dance'];
   const re = /href="(https:\/\/www\.mevalim\.co\.il\/[^"]+\/)"/gi;
   let m;
   while ((m = re.exec(html)) !== null) {
-    const url = m[1];
-    const parts = url.replace('https://www.mevalim.co.il/', '').split('/').filter(Boolean);
-    if (parts.length === 2 && categories.includes(parts[0])) {
-      links.add(url);
-    }
+    const parts = m[1].replace('https://www.mevalim.co.il/','').split('/').filter(Boolean);
+    if (parts.length === 2 && cats.includes(parts[0])) links.add(m[1]);
   }
-  return [...links].slice(0, 20);
+  return [...links].slice(0, 15);
 }
 
-async function fetchMevalimCategory(categoryUrl, type) {
+async function fetchMevalim(categoryUrl, type) {
   const html = await fetchUrl(categoryUrl);
   if (!html) return [];
-  const directShows = parseMevalimTickets(html, type);
-  const artistLinks = extractArtistLinks(html);
-  const subResults = await Promise.allSettled(
-    artistLinks.map(link => fetchUrl(link).then(h => parseMevalimTickets(h, type)))
-  );
-  let all = [...directShows];
-  subResults.forEach(r => { if (r.status === 'fulfilled') all = all.concat(r.value); });
+  const direct = parseMevalim(html, type);
+  const artistLinks = extractMevalimArtistLinks(html);
+  const subs = await Promise.allSettled(artistLinks.map(l => fetchUrl(l).then(h => parseMevalim(h, type))));
+  let all = [...direct];
+  subs.forEach(r => { if (r.status === 'fulfilled') all = all.concat(r.value); });
   return all;
 }
 
@@ -91,7 +108,8 @@ function filterByLocation(shows, locations) {
   return shows.filter(s => {
     if (!s.city) return false;
     return locations.some(loc => {
-      if (s.city.includes(loc.replace('תל אביב והסביבה','תל אביב').replace(' והסביבה','').replace(' והקריות',''))) return true;
+      const clean = loc.replace('תל אביב והסביבה','תל אביב').replace(' והסביבה','').replace(' והקריות','');
+      if (s.city.includes(clean)) return true;
       if (loc.includes('מרכז') && ['תל אביב','יפו','רמת גן','גבעתיים','פתח תקווה','בני ברק','חולון','בת ים'].some(c => s.city.includes(c))) return true;
       if (loc.includes('שרון') && ['נתניה','הרצליה','כפר סבא','רעננה','הוד השרון','רמת השרון'].some(c => s.city.includes(c))) return true;
       if (loc.includes('דרום') && ['באר שבע','אשדוד','אשקלון','קריית גת','דימונה'].some(c => s.city.includes(c))) return true;
@@ -108,7 +126,7 @@ function filterByDate(shows, dateFrom, dateTo) {
     if (!s.date) return true;
     const p = s.date.split('/');
     if (p.length < 3) return true;
-    const d = p[2] + '-' + p[1] + '-' + p[0];
+    const d = p[2]+'-'+p[1]+'-'+p[0];
     if (dateFrom && d < dateFrom) return false;
     if (dateTo && d > dateTo) return false;
     return true;
@@ -126,13 +144,15 @@ module.exports = async function(req, res) {
     const isKids = types.some(t => t.includes('ילדים'));
 
     const tasks = [];
-    if (isMuzika) {
-      tasks.push(fetchMevalimCategory('https://www.mevalim.co.il/shows/', 'מוזיקה'));
-      tasks.push(fetchMevalimCategory('https://www.mevalim.co.il/concerts/', 'קונצרט'));
-    }
-    if (isStandup) tasks.push(fetchMevalimCategory('https://www.mevalim.co.il/stand-up/', 'סטאנדאפ'));
-    if (isTheater) tasks.push(fetchMevalimCategory('https://www.mevalim.co.il/theater/', 'תיאטרון'));
-    if (isKids) tasks.push(fetchMevalimCategory('https://www.mevalim.co.il/kids-shows/', 'ילדים'));
+    if (isMuzika) tasks.push(fetchUrl('https://live.tickchak.co.il/shows').then(h => parseTickchak(h, 'מוזיקה')));
+    if (isStandup) tasks.push(fetchUrl('https://live.tickchak.co.il/standup').then(h => parseTickchak(h, 'סטאנדאפ')));
+    if (isTheater) tasks.push(fetchUrl('https://live.tickchak.co.il/theater').then(h => parseTickchak(h, 'תיאטרון')));
+    if (isKids) tasks.push(fetchUrl('https://live.tickchak.co.il/childrens-shows').then(h => parseTickchak(h, 'ילדים')));
+    if (isMuzika) tasks.push(fetchMevalim('https://www.mevalim.co.il/shows/', 'מוזיקה'));
+    if (isMuzika) tasks.push(fetchMevalim('https://www.mevalim.co.il/concerts/', 'קונצרט'));
+    if (isStandup) tasks.push(fetchMevalim('https://www.mevalim.co.il/stand-up/', 'סטאנדאפ'));
+    if (isTheater) tasks.push(fetchMevalim('https://www.mevalim.co.il/theater/', 'תיאטרון'));
+    if (isKids) tasks.push(fetchMevalim('https://www.mevalim.co.il/kids-shows/', 'ילדים'));
 
     const results = await Promise.allSettled(tasks);
     let all = [];
@@ -140,17 +160,15 @@ module.exports = async function(req, res) {
 
     const seen = new Set();
     all = all.filter(s => { if (!s.url || seen.has(s.url)) return false; seen.add(s.url); return true; });
-
     all = filterByLocation(all, locations);
     all = filterByDate(all, dateFrom, dateTo);
-
     all.sort((a, b) => {
       if (!a.date) return 1; if (!b.date) return -1;
       const pa = a.date.split('/'), pb = b.date.split('/');
       return (pa[2]+'-'+pa[1]+'-'+pa[0]).localeCompare(pb[2]+'-'+pb[1]+'-'+pb[0]);
     });
 
-    res.status(200).json({ shows: all.slice(0, 40), total: all.length, sources: ['mevalim'] });
+    res.status(200).json({ shows: all.slice(0,50), total: all.length, sources: ['tickchak','mevalim'] });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
