@@ -153,7 +153,7 @@ async function doSearch() {
   if (!from || !to) { alert('בחר תאריכים'); return; }
 
   btn.disabled = true; btn.textContent = '🔍 מחפש...';
-  results.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>מחפש הופעות ב-mevalim.co.il...</p></div>';
+  results.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>מחפש ב-mevalim, tickchak, muzi, kupat...</p></div>';
 
   try {
     const response = await fetch('/api/search', {
@@ -191,12 +191,14 @@ function renderResults(shows, locs, types) {
       (s.city ? '<span>📍 ' + s.city + '</span>' : '') +
       (s.time ? '<span>🕐 ' + s.time + '</span>' : '') +
       '<span class="tag' + (isStandup ? ' standup' : '') + '">' + (s.type || 'מוזיקה') + '</span>' +
+          (s.source ? '<span style="font-size:0.65rem;color:#444;">' + s.source + '</span>' : '') +
       '</div></div>' +
       '<div class="show-right"><div class="show-price">' + (s.price || '') + '</div><div class="buy-btn">לרכישה ←</div></div>' +
       '</a>';
   }).join('');
+  const sources = data.sources ? data.sources.join(', ') : 'mevalim';
   results.innerHTML = '<div class="results-header">נמצאו <strong>' + shows.length + '</strong> הופעות · ' + locs + ' · ' + types + '</div>' + cards +
-    '<div class="source-note">מקור: mevalim.co.il</div>';
+    '<div class="source-note">מקורות: ' + sources + '</div>';
 }
 </script>
 </body>
