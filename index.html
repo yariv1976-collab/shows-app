@@ -164,7 +164,7 @@ async function doSearch() {
     if (!response.ok) throw new Error('שגיאת שרת ' + response.status);
     const data = await response.json();
     if (data.error) throw new Error(data.error);
-    renderResults(data.shows || [], state.loc.join(', ') || 'כל הארץ', state.type.join(', ') || 'הכל');
+    renderResults(data.shows || [], state.loc.join(', ') || 'כל הארץ', state.type.join(', ') || 'הכל', data.sources || []);
   } catch (e) {
     results.innerHTML = '<div class="error-box"><strong>שגיאה:</strong><br>' + e.message + '</div>';
   }
@@ -173,7 +173,7 @@ async function doSearch() {
 
 const MONTHS = ['','ינו','פבר','מרץ','אפר','מאי','יוני','יולי','אוג','ספט','אוק','נוב','דצ'];
 
-function renderResults(shows, locs, types) {
+function renderResults(shows, locs, types, sources) {
   const results = document.getElementById('results');
   if (!shows.length) {
     results.innerHTML = '<div class="empty-state"><div class="empty-icon">🎵</div><p>לא נמצאו הופעות. נסה לשנות פרמטרים.</p></div>';
@@ -196,9 +196,9 @@ function renderResults(shows, locs, types) {
       '<div class="show-right"><div class="show-price">' + (s.price || '') + '</div><div class="buy-btn">לרכישה ←</div></div>' +
       '</a>';
   }).join('');
-  const sources = data.sources ? data.sources.join(', ') : 'mevalim';
+  const srcs = (sources && sources.length) ? sources.join(', ') : 'mevalim';
   results.innerHTML = '<div class="results-header">נמצאו <strong>' + shows.length + '</strong> הופעות · ' + locs + ' · ' + types + '</div>' + cards +
-    '<div class="source-note">מקורות: ' + sources + '</div>';
+    '<div class="source-note">מקורות: ' + srcs + '</div>';
 }
 </script>
 </body>
