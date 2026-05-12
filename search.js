@@ -17,7 +17,7 @@ function fetchUrl(url) {
       if (res.statusCode !== 200) return resolve('');
       let data = '';
       res.setEncoding('utf8');
-      res.on('data', chunk => { data += chunk; if (data.length > 1500000) res.destroy(); });
+      res.on('data', chunk => { data += chunk; if (data.length > 2000000) res.destroy(); });
       res.on('end', () => resolve(data));
     });
     req.on('error', () => resolve(''));
@@ -25,47 +25,38 @@ function fetchUrl(url) {
   });
 }
 
-const CITIES = ['תל אביב','יפו','ירושלים','חיפה','באר שבע','נתניה','הרצליה','רמת גן','פתח תקווה','אשדוד','אשקלון','רעננה','כפר סבא','ראשון לציון','רחובות','נס ציונה','קריית מוצקין','חולון','בת ים','מודיעין','עכו','נהריה','טבריה','צפת','אילת','קריית גת','לוד','רמלה','הוד השרון','רמת השרון','גבעתיים','בני ברק','קיסריה','זכרון יעקב','כרמיאל','דימונה','זאפה'];
+const CITIES = ['תל אביב','יפו','ירושלים','חיפה','באר שבע','נתניה','הרצליה','רמת גן','פתח תקווה','אשדוד','אשקלון','רעננה','כפר סבא','ראשון לציון','רחובות','נס ציונה','קריית מוצקין','חולון','בת ים','מודיעין','עכו','נהריה','טבריה','צפת','אילת','קריית גת','לוד','רמלה','הוד השרון','רמת השרון','גבעתיים','בני ברק','קיסריה','זכרון יעקב','כרמיאל','דימונה','בלומפילד','גגרין'];
 
 function extractCity(text) {
   for (const c of CITIES) { if (text.includes(c)) return c; }
   return '';
 }
 
-// ---- TICKCHAK ----
 function parseTickchak(html, type) {
   const shows = [];
-  // Find event blocks: look for date pattern near event links
-  const eventRe = /<a[^>]+href="([^"]*tickchak\.co\.il[^"]*\/event\/[^"?#]*)"[^>]*>([\s\S]{20,400}?)<\/a>/gi;
+  const anchorRe = /<a\s[^>]*href="([^"]*tickchak\.co\.il[^"]*\/event\/[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
   let m;
-  while ((m = eventRe.exec(html)) !== null) {
+  while ((m = anchorRe.exec(html)) !== null) {
     const url = m[1].split('?')[0];
     const inner = m[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    if (inner.length < 5) continue;
-
-    // Date: "19.4.26" or "25 05.2026" or "14\n05.2026"
-    const dateM = inner.match(/(\d{1,2})\s*[.\s]\s*(\d{1,2})\s*[.\s]\s*(20\d{2}|\d{2})\b/);
+    if (inner.length < 5 || inner.length > 600) continue;
+    const dateM = inner.match(/(\d{1,2})\s+(\d{2})\.(\d{4})/);
     if (!dateM) continue;
-    const year = dateM[3].length === 2 ? '20' + dateM[3] : dateM[3];
-    const date = dateM[1].padStart(2,'0') + '/' + dateM[2].padStart(2,'0') + '/' + year;
-
+    const date = dateM[1].padStart(2, '0') + '/' + dateM[2] + '/' + dateM[3];
     const timeM = inner.match(/(\d{2}):(\d{2})/);
     const city = extractCity(inner);
-
     let title = inner
       .replace(/האירוע החל/g, '').replace(/לאתר המכירה/g, '')
-      .replace(/קרדיט לצלם[^\n]*/g, '').replace(/יום [א-ז]'/g, '')
-      .replace(/\d{1,2}\s*[.]\s*\d{1,2}\s*[.]\s*\d{2,4}/g, '')
-      .replace(/\d{2}:\d{2}/g, '').replace(new RegExp(city, 'g'), '')
+      .replace(/קרדיט לצלם[^\u05D0-\u05EA]*/g, '')
+      .replace(/\d{1,2}\s+\d{2}\.\d{4}/g, '').replace(/\d{2}:\d{2}/g, '')
+      .replace(/יום [א-ז]'/g, '').replace(new RegExp(city, 'g'), '')
       .replace(/\s+/g, ' ').trim();
-
     if (title.length < 3 || title.length > 120) continue;
     shows.push({ title, city, date, time: timeM ? timeM[1] + ':' + timeM[2] : '', price: '', type, url, source: 'tickchak' });
   }
   return shows;
 }
 
-// ---- MEVALIM ----
 function parseMevalim(html, type) {
   const shows = [];
   const re = /href="(https:\/\/tickets\.mevalim\.co\.il\/event\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
@@ -74,15 +65,15 @@ function parseMevalim(html, type) {
     const url = m[1];
     const inner = m[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
     if (inner.length < 3) continue;
-    const priceM = inner.match(/(\d+)\s*₪/);
+    const priceM = inner.match(/(\d+)\s*\u20aa/);
     const dateM = inner.match(/(\d{1,2})\.(\d{2})/);
     if (!dateM) continue;
     const date = dateM[1].padStart(2, '0') + '/' + dateM[2] + '/2026';
     const timeM = inner.match(/(\d{2}):(\d{2})/);
     const city = extractCity(inner);
-    const price = priceM ? '₪' + priceM[1] : '';
+    const price = priceM ? '\u20aa' + priceM[1] : '';
     let title = inner
-      .replace(/~~[\d\s₪]+~~/g, '').replace(/\d+\s*₪/g, '')
+      .replace(/~~[\d\s\u20aa]+~~/g, '').replace(/\d+\s*\u20aa/g, '')
       .replace(/\d{1,2}\.\d{2}/g, '').replace(/\d{2}:\d{2}/g, '')
       .replace(new RegExp(city, 'g'), '').replace(/\s+/g, ' ').trim();
     if (title.length < 2) continue;
@@ -120,7 +111,7 @@ function filterByLocation(shows, locations) {
     return locations.some(loc => {
       const clean = loc.replace('תל אביב והסביבה', 'תל אביב').replace(' והסביבה', '').replace(' והקריות', '');
       if (s.city.includes(clean)) return true;
-      if (loc.includes('מרכז') && ['תל אביב','יפו','זאפה','רמת גן','גבעתיים','פתח תקווה','בני ברק','חולון','בת ים'].some(c => s.city.includes(c))) return true;
+      if (loc.includes('מרכז') && ['תל אביב','יפו','בלומפילד','גגרין','רמת גן','גבעתיים','פתח תקווה','בני ברק','חולון','בת ים'].some(c => s.city.includes(c))) return true;
       if (loc.includes('שרון') && ['נתניה','הרצליה','כפר סבא','רעננה','הוד השרון','רמת השרון'].some(c => s.city.includes(c))) return true;
       if (loc.includes('דרום') && ['באר שבע','אשדוד','אשקלון','קריית גת','דימונה'].some(c => s.city.includes(c))) return true;
       if (loc.includes('צפון') && ['חיפה','עכו','נהריה','טבריה','צפת','קיסריה','זכרון','כרמיאל','קריית מוצקין'].some(c => s.city.includes(c))) return true;
@@ -154,14 +145,10 @@ module.exports = async function(req, res) {
     const isKids = types.some(t => t.includes('ילדים'));
 
     const tasks = [];
-
-    // Tickchak
     if (isMuzika) tasks.push(fetchUrl('https://live.tickchak.co.il/shows').then(h => parseTickchak(h, 'מוזיקה')));
     if (isStandup) tasks.push(fetchUrl('https://live.tickchak.co.il/standup').then(h => parseTickchak(h, 'סטאנדאפ')));
     if (isTheater) tasks.push(fetchUrl('https://live.tickchak.co.il/theater').then(h => parseTickchak(h, 'תיאטרון')));
     if (isKids) tasks.push(fetchUrl('https://live.tickchak.co.il/childrens-shows').then(h => parseTickchak(h, 'ילדים')));
-
-    // Mevalim
     if (isMuzika) tasks.push(fetchMevalim('https://www.mevalim.co.il/shows/', 'מוזיקה'));
     if (isMuzika) tasks.push(fetchMevalim('https://www.mevalim.co.il/concerts/', 'קונצרט'));
     if (isStandup) tasks.push(fetchMevalim('https://www.mevalim.co.il/stand-up/', 'סטאנדאפ'));
@@ -172,13 +159,10 @@ module.exports = async function(req, res) {
     let all = [];
     results.forEach(r => { if (r.status === 'fulfilled') all = all.concat(r.value); });
 
-    // Deduplicate
     const seen = new Set();
     all = all.filter(s => { if (!s.url || seen.has(s.url)) return false; seen.add(s.url); return true; });
-
     all = filterByLocation(all, locations);
     all = filterByDate(all, dateFrom, dateTo);
-
     all.sort((a, b) => {
       if (!a.date) return 1; if (!b.date) return -1;
       const pa = a.date.split('/'), pb = b.date.split('/');
